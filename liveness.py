@@ -28,7 +28,7 @@ def check_liveness(image_path: str):
         brightness = compute_brightness(img)
         texture = compute_texture_score(img)
 
-        # 🔥 LOGIQUE SIMPLE MAIS EFFICACE
+        #  LOGIQUE SIMPLE MAIS EFFICACE
         score = 0
 
         # Netteté
@@ -43,7 +43,7 @@ def check_liveness(image_path: str):
         if texture > 30:
             score += 1
 
-        # 🔥 Décision
+        #  Décision
         if score >= 2:
             decision = "REAL"
         else:

@@ -3,94 +3,45 @@ from face_extractor import extract_face
 from verifier import verify_faces
 import os
 
-app = FastAPI(title="Biometric Service", version="1.0.1")
-
+app = FastAPI(title="Biometric Service", version="2.0")
 
 OUTPUT_DIR = "output"
-DOC_FACE_PATH = os.path.join(OUTPUT_DIR, "doc_face.png")
-SELFIE_FACE_PATH = os.path.join(OUTPUT_DIR, "selfie_face.png")
+DOC_FACE = os.path.join(OUTPUT_DIR, "image_face.jpg")
+SELFIE_FACE = os.path.join(OUTPUT_DIR, "selfie_face.jpg")
 
 
-def ensure_output_dir():
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
+def ensure_output():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 @app.get("/")
 def root():
-    return {
-        "service": "biometric_service",
-        "status": "running",
-        "endpoints": ["/test-face", "/verify-face"]
-    }
+    return {"status": "running"}
 
 
-@app.get("/test-face")
-def test_face(
-    doc_path: str = Query("image.png"),
-    selfie_path: str = Query("selfie.jpg")
+@app.get("/verify")
+def verify(
+    image: str = Query("image.jpg"),
+    selfie: str = Query("selfie.jpg")
 ):
-    ensure_output_dir()
+    ensure_output()
 
-    if not os.path.exists(doc_path):
-        raise HTTPException(404, f"Document image not found: {doc_path}")
+    if not os.path.exists(image):
+        raise HTTPException(404, "Image not found")
 
-    if not os.path.exists(selfie_path):
-        raise HTTPException(404, f"Selfie image not found: {selfie_path}")
+    if not os.path.exists(selfie):
+        raise HTTPException(404, "Selfie not found")
 
-    # Extract faces
-    doc_face = extract_face(doc_path, DOC_FACE_PATH, is_document=True)
-    selfie_face = extract_face(selfie_path, SELFIE_FACE_PATH, is_document=False)
+    # extraction
+    face1 = extract_face(image, DOC_FACE)
+    face2 = extract_face(selfie, SELFIE_FACE)
 
-    if doc_face is None:
-        raise HTTPException(400, "Failed to extract face from document")
+    if face1 is None:
+        raise HTTPException(400, "No face in image")
 
-    if selfie_face is None:
-        raise HTTPException(400, "Failed to extract face from selfie")
+    if face2 is None:
+        raise HTTPException(400, "No face in selfie")
 
-    return {
-        "doc_face": DOC_FACE_PATH,
-        "selfie_face": SELFIE_FACE_PATH
-    }
-
-
-@app.get("/verify-face")
-def verify_face(
-    doc_path: str = Query("image.png"),
-    selfie_path: str = Query("selfie.jpg"),
-    force_reextract: bool = Query(False)
-):
-    ensure_output_dir()
-
-    if not os.path.exists(doc_path):
-        raise HTTPException(404, f"Document image not found: {doc_path}")
-
-    if not os.path.exists(selfie_path):
-        raise HTTPException(404, f"Selfie image not found: {selfie_path}")
-
-    # 🔥 Only re-extract if needed
-    if force_reextract or not os.path.exists(DOC_FACE_PATH):
-        doc_face = extract_face(doc_path, DOC_FACE_PATH, is_document=True)
-        if doc_face is None:
-            raise HTTPException(400, "Failed to extract face from document")
-
-    if force_reextract or not os.path.exists(SELFIE_FACE_PATH):
-        selfie_face = extract_face(selfie_path, SELFIE_FACE_PATH, is_document=False)
-        if selfie_face is None:
-            raise HTTPException(400, "Failed to extract face from selfie")
-
-    # 🔥 Verify using already extracted faces
-    result = verify_faces(DOC_FACE_PATH, SELFIE_FACE_PATH)
-
-    if result is None:
-        raise HTTPException(500, "Verification failed")
+    result = verify_faces(face1, face2)
 
     return result
-
-
-@app.get("/liveness")
-def liveness():
-    return {
-        "status": "NOT_IMPLEMENTED",
-        "note": "Use video-based liveness (blink / head movement) for real systems."
-    }
