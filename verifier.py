@@ -1,22 +1,20 @@
 from deepface import DeepFace
 import os
 
-MODEL_NAME = "Facenet512"
+MODEL_NAME = "ArcFace"
 THRESHOLD = 0.68
 
 
 def distance_to_score(distance: float, threshold: float) -> float:
     """
-    Convertit la distance DeepFace en score métier :
-    - distance <= threshold  -> score entre 90 et 100
-    - distance > threshold   -> score < 90
+    Business score:
+    - if accepted => score between 90 and 99
+    - if rejected => score = 0
     """
-    if distance <= threshold:
-        score = 100 - (distance / threshold) * 10
-    else:
-        score = 90 - ((distance - threshold) / threshold) * 100
-
-    return round(max(0, min(100, score)), 2)
+    if distance < threshold:
+        score = 90 + (1 - distance / threshold) * 9
+        return round(min(score, 99), 2)
+    return 0.0
 
 
 def verify_faces(image_path: str, selfie_path: str):
@@ -31,23 +29,21 @@ def verify_faces(image_path: str, selfie_path: str):
             img1_path=selfie_path,
             img2_path=image_path,
             model_name=MODEL_NAME,
-            detector_backend="skip",   # car les visages sont déjà extraits
+            detector_backend="skip",   # faces already extracted
             enforce_detection=False,
             align=False,
-            normalization="base"
+            normalization="ArcFace"    # important for ArcFace
         )
 
         distance = float(result["distance"])
+        verified = distance < THRESHOLD
         score = distance_to_score(distance, THRESHOLD)
-
-        verified = score >= 90
-        decision = "ACCEPTED" if verified else "REJECTED"
 
         return {
             "verified": verified,
             "distance": round(distance, 6),
             "score": score,
-            "decision": decision,
+            "decision": "ACCEPTED" if verified else "REJECTED",
             "model": MODEL_NAME,
             "threshold": THRESHOLD
         }
