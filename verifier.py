@@ -1,61 +1,56 @@
-from fastapi import FastAPI, HTTPException, Query
 from deepface import DeepFace
 import os
 
-app = FastAPI()
+MODEL_NAME = "Facenet512"
+THRESHOLD = 0.68
 
-# ======================
-# CONFIG
-# ======================
-MODEL_NAME = "ArcFace"
-THRESHOLD = 0.68  # stable pour ArcFace
 
-# ======================
-# VERIFY ENDPOINT
-# ======================
-@app.get("/verify")
-def verify(image: str = Query(...), selfie: str = Query(...)):
+def distance_to_score(distance: float, threshold: float) -> float:
+    """
+    Convertit la distance DeepFace en score métier :
+    - distance <= threshold  -> score entre 90 et 100
+    - distance > threshold   -> score < 90
+    """
+    if distance <= threshold:
+        score = 100 - (distance / threshold) * 10
+    else:
+        score = 90 - ((distance - threshold) / threshold) * 100
+
+    return round(max(0, min(100, score)), 2)
+
+
+def verify_faces(image_path: str, selfie_path: str):
+    if not os.path.exists(image_path):
+        return {"error": "image not found"}
+
+    if not os.path.exists(selfie_path):
+        return {"error": "selfie not found"}
+
     try:
-        # check files exist
-        if not os.path.exists(image):
-            raise HTTPException(status_code=400, detail="Image not found")
-        if not os.path.exists(selfie):
-            raise HTTPException(status_code=400, detail="Selfie not found")
-
-        # DeepFace verification
         result = DeepFace.verify(
-            img1_path=selfie,
-            img2_path=image,
+            img1_path=selfie_path,
+            img2_path=image_path,
             model_name=MODEL_NAME,
-            enforce_detection=True
+            detector_backend="skip",   # car les visages sont déjà extraits
+            enforce_detection=False,
+            align=False,
+            normalization="base"
         )
 
         distance = float(result["distance"])
+        score = distance_to_score(distance, THRESHOLD)
 
-        # ======================
-        # DECISION LOGIC FIXED
-        # ======================
-        verified = distance < THRESHOLD
-
-        if verified:
-            decision = "ACCEPTED"
-            score = round((1 - distance) * 100, 2)
-        else:
-            decision = "REJECTED"
-            score = round((1 - distance) * 100, 2)
+        verified = score >= 90
+        decision = "ACCEPTED" if verified else "REJECTED"
 
         return {
             "verified": verified,
-            "decision": decision,
-            "distance": distance,
+            "distance": round(distance, 6),
             "score": score,
+            "decision": decision,
             "model": MODEL_NAME,
             "threshold": THRESHOLD
         }
 
     except Exception as e:
-        return {
-            "verified": False,
-            "decision": "ERROR",
-            "message": str(e)
-        }
+        return {"error": str(e)}
