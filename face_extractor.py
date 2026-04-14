@@ -4,7 +4,6 @@ import os
 
 TARGET_SIZE = (160, 160)
 
-
 def add_margin(face, margin=0.2):
     h, w, _ = face.shape
     pad_h = int(h * margin)
@@ -18,7 +17,6 @@ def add_margin(face, margin=0.2):
         value=[0, 0, 0]
     )
 
-
 def extract_face(image_path: str, output_path: str):
     try:
         faces = DeepFace.extract_faces(
@@ -31,7 +29,6 @@ def extract_face(image_path: str, output_path: str):
         if len(faces) == 0:
             return None
 
-        # prendre le plus grand visage
         faces = sorted(
             faces,
             key=lambda x: x["facial_area"]["w"] * x["facial_area"]["h"],
@@ -39,20 +36,12 @@ def extract_face(image_path: str, output_path: str):
         )
 
         face = faces[0]["face"]
-
-        # float RGB -> uint8
         face = (face * 255).clip(0, 255).astype("uint8")
-
-        # RGB -> BGR
         face = cv2.cvtColor(face, cv2.COLOR_RGB2BGR)
 
-        # marge
         face = add_margin(face, margin=0.2)
-
-        # resize
         face = cv2.resize(face, TARGET_SIZE, interpolation=cv2.INTER_AREA)
 
-        # créer dossier si nécessaire
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)

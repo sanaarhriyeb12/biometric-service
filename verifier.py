@@ -1,20 +1,41 @@
 from deepface import DeepFace
 import os
 
-MODEL_NAME = "ArcFace"
-THRESHOLD = 0.68
+MODEL_NAME = "Facenet512"
+
+# Seuils métier
+ACCEPT_THRESHOLD = 0.45
+REVIEW_THRESHOLD = 0.67
 
 
-def distance_to_score(distance: float, threshold: float) -> float:
+def distance_to_score(distance: float) -> float:
     """
-    Business score:
-    - if accepted => score between 90 and 99
-    - if rejected => score = 0
+    Convert distance to business score:
+    - distance < 0.45  -> score 90 to 99
+    - 0.45 to 0.67     -> score 50 to 89
+    - >= 0.67          -> score 0
     """
-    if distance < threshold:
-        score = 90 + (1 - distance / threshold) * 9
-        return round(min(score, 99), 2)
+    if distance < ACCEPT_THRESHOLD:
+        # Map [0 .. 0.45] -> [99 .. 90]
+        score = 99 - (distance / ACCEPT_THRESHOLD) * 9
+        return round(max(90, min(99, score)), 2)
+
+    if distance < REVIEW_THRESHOLD:
+        # Map [0.45 .. 0.67] -> [89 .. 50]
+        ratio = (distance - ACCEPT_THRESHOLD) / (REVIEW_THRESHOLD - ACCEPT_THRESHOLD)
+        score = 89 - ratio * 39
+        return round(max(50, min(89, score)), 2)
+
     return 0.0
+
+
+def get_decision(distance: float) -> str:
+    if distance < ACCEPT_THRESHOLD:
+        return "ACCEPTED"
+    elif distance < REVIEW_THRESHOLD:
+        return "REVIEW"
+    else:
+        return "REJECTED"
 
 
 def verify_faces(image_path: str, selfie_path: str):
@@ -32,20 +53,21 @@ def verify_faces(image_path: str, selfie_path: str):
             detector_backend="skip",   # faces already extracted
             enforce_detection=False,
             align=False,
-            normalization="ArcFace"    # important for ArcFace
+            normalization="base"
         )
 
         distance = float(result["distance"])
-        verified = distance < THRESHOLD
-        score = distance_to_score(distance, THRESHOLD)
+        decision = get_decision(distance)
+        score = distance_to_score(distance)
 
         return {
-            "verified": verified,
+            "verified": decision == "ACCEPTED",
             "distance": round(distance, 6),
             "score": score,
-            "decision": "ACCEPTED" if verified else "REJECTED",
+            "decision": decision,
             "model": MODEL_NAME,
-            "threshold": THRESHOLD
+            "accept_threshold": ACCEPT_THRESHOLD,
+            "review_threshold": REVIEW_THRESHOLD
         }
 
     except Exception as e:

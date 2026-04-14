@@ -45,9 +45,10 @@ for person in os.listdir(DATASET):
             if result["decision"] == "ACCEPTED":
                 accepted += 1
 
-            print(f"{person} vs {file} → {result['score']}% → {result['decision']}")
+            print(f"{person} vs {file} → distance={result['distance']} → score={result['score']}% → {result['decision']}"
+)
 
-# 📊 RESULTATS
+
 print("\n====================")
 print("TOTAL TESTS:", total)
 print("ACCEPTED:", accepted)
