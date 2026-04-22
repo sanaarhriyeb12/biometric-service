@@ -1,44 +1,42 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from face_extractor import extract_face
 from verifier import verify_faces
 from liveness import check_liveness
 import os
+import shutil
+import uuid
 
 app = FastAPI(title="Biometric Service", version="2.0")
 
+UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "output"
-IMAGE_FACE = os.path.join(OUTPUT_DIR, "image_face.jpg")
-SELFIE_FACE = os.path.join(OUTPUT_DIR, "selfie_face.jpg")
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-def ensure_output_dir():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-
-@app.get("/")
-def root():
-    return {
-        "service": "biometric_service",
-        "status": "running",
-        "endpoints": ["/extract", "/verify", "/liveness"]
-    }
-
-
-@app.get("/extract")
-def extract(
-    image: str = Query(...),
-    selfie: str = Query(...)
+@app.post("/verify-upload")
+async def verify_upload(
+    image: UploadFile = File(...),
+    selfie: UploadFile = File(...)
 ):
-    ensure_output_dir()
+    image_id = str(uuid.uuid4())
+    selfie_id = str(uuid.uuid4())
 
-    if not os.path.exists(image):
-        raise HTTPException(status_code=404, detail=f"Image not found: {image}")
+    image_path = os.path.join(UPLOAD_DIR, f"{image_id}_{image.filename}")
+    selfie_path = os.path.join(UPLOAD_DIR, f"{selfie_id}_{selfie.filename}")
 
-    if not os.path.exists(selfie):
-        raise HTTPException(status_code=404, detail=f"Selfie not found: {selfie}")
+    with open(image_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
 
-    image_face = extract_face(image, IMAGE_FACE)
-    selfie_face = extract_face(selfie, SELFIE_FACE)
+    with open(selfie_path, "wb") as buffer:
+        shutil.copyfileobj(selfie.file, buffer)
+
+    image_face_path = os.path.join(OUTPUT_DIR, f"{image_id}_face.jpg")
+    selfie_face_path = os.path.join(OUTPUT_DIR, f"{selfie_id}_face.jpg")
+
+    image_face = extract_face(image_path, image_face_path)
+    selfie_face = extract_face(selfie_path, selfie_face_path)
 
     if image_face is None:
         raise HTTPException(status_code=400, detail="No face detected in image")
@@ -46,52 +44,7 @@ def extract(
     if selfie_face is None:
         raise HTTPException(status_code=400, detail="No face detected in selfie")
 
-    return {
-        "image_face": image_face,
-        "selfie_face": selfie_face
-    }
-
-
-@app.get("/verify")
-def verify(
-    image: str = Query(...),
-    selfie: str = Query(...),
-    force_reextract: bool = Query(False)
-):
-    ensure_output_dir()
-
-    if not os.path.exists(image):
-        raise HTTPException(status_code=404, detail=f"Image not found: {image}")
-
-    if not os.path.exists(selfie):
-        raise HTTPException(status_code=404, detail=f"Selfie not found: {selfie}")
-
-    if force_reextract or not os.path.exists(IMAGE_FACE):
-        image_face = extract_face(image, IMAGE_FACE)
-        if image_face is None:
-            raise HTTPException(status_code=400, detail="No face detected in image")
-
-    if force_reextract or not os.path.exists(SELFIE_FACE):
-        selfie_face = extract_face(selfie, SELFIE_FACE)
-        if selfie_face is None:
-            raise HTTPException(status_code=400, detail="No face detected in selfie")
-
-    result = verify_faces(IMAGE_FACE, SELFIE_FACE)
-
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-
-    return result
-
-
-@app.get("/liveness")
-def liveness(
-    selfie: str = Query(...)
-):
-    if not os.path.exists(selfie):
-        raise HTTPException(status_code=404, detail=f"Selfie not found: {selfie}")
-
-    result = check_liveness(selfie)
+    result = verify_faces(image_face, selfie_face)
 
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
