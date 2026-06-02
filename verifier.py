@@ -59,6 +59,8 @@ def verify_faces(image_path: str, selfie_path: str):
         distance = float(result["distance"])
         decision = get_decision(distance)
         score = distance_to_score(distance)
+        if decision == "REJECTED":
+            score = 0.0
 
         return {
             "verified": decision == "ACCEPTED",
