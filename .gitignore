@@ -1,6 +1,5 @@
 # Virtual environment
 venv/
-.venv310/
 .env
 __pycache__/
 *.pyc
